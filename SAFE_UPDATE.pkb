@@ -13,7 +13,7 @@ IS
     TYPE defect_type IS TABLE OF pipe_records;
 
     PROCEDURE UPDATE_RECORD(p_id             IN     defect_locations.nid%TYPE
-                           ,p_sdescription   IN     defect_locations.sdescription%TYPE
+                           ,p_sdescription   IN OUT    defect_locations.sdescription%TYPE
                            ,e_message           OUT VARCHAR2);
 
     FUNCTION get_records
@@ -26,7 +26,8 @@ IS
 
     PROCEDURE check_strings(sp_string   IN OUT VARCHAR2
                            ,serror         OUT VARCHAR2
-                           ,nerror         OUT NUMBER);
+                           ,nerror         OUT NUMBER
+                           ,sp_length IN NUMBER);
 
     PROCEDURE UPDATE_RECORD(js_data VARCHAR2);
 END safe_update;
@@ -38,31 +39,36 @@ CREATE OR REPLACE PACKAGE BODY safe_update
 IS
     --UPDATE RECORD IN DEFECT_LOCATIONS TABLE
     PROCEDURE UPDATE_RECORD(p_id             IN     defect_locations.nid%TYPE
-                           ,p_sdescription   IN     defect_locations.sdescription%TYPE
+                           ,p_sdescription   IN OUT defect_locations.sdescription%TYPE
                            ,e_message           OUT VARCHAR2)
     IS
-        null_value     EXCEPTION;
-        wrong_format   EXCEPTION;
-        check_result   BOOLEAN;
+        ip_message        VARCHAR2(200);
+        ip_code           NUMBER(3);
+        null_value_desc   EXCEPTION;
+        wrong_format      EXCEPTION;
     BEGIN
         IF p_sdescription IS NULL THEN
-            RAISE null_value;
+            RAISE null_value_desc;
         END IF;
 
-        --    check_result := check_strings(p_sdescription);
 
-        IF NOT check_result THEN
+        check_strings(p_sdescription
+                     ,ip_message
+                     ,ip_code
+                     ,101);
+
+        IF ip_code != 0 THEN
             RAISE wrong_format;
         END IF;
 
         UPDATE defect_locations
         SET    sdescription = p_sdescription
         WHERE  nid = p_id;
-    EXCEPTION
-        WHEN null_value THEN
+        
+        EXCEPTION        WHEN null_value_desc THEN
             e_message := 'Description not found';
         WHEN wrong_format THEN
-            e_message := 'Description not capital';
+            e_message := ip_message;
     END UPDATE_RECORD;
 
 
@@ -108,7 +114,8 @@ IS
 
         check_strings(p_sname
                      ,ip_message
-                     ,ip_code);
+                     ,ip_code
+                     ,31);
 
         IF ip_code != 0 THEN
             RAISE wrong_format;
@@ -133,7 +140,8 @@ IS
     -- FUNCTION TO VALIDATE AND FORMAT STRINGS [Is first letter capital, remove spaces, check length]
     PROCEDURE check_strings(sp_string   IN OUT VARCHAR2
                            ,serror         OUT VARCHAR2
-                           ,nerror         OUT NUMBER)
+                           ,nerror         OUT NUMBER
+                           ,sp_length IN NUMBER)
     IS
     BEGIN
         sp_string := LTRIM(sp_string);
@@ -153,7 +161,7 @@ IS
                                  ,1) THEN
             serror := 'First letter not capital';
             nerror := 2;
-        ELSIF LENGTH(sp_string) >= 31 THEN
+        ELSIF LENGTH(sp_string) >= sp_length THEN
             serror := 'Text too long';
             nerror := 3;
         END IF;
